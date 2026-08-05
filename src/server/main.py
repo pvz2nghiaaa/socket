@@ -3,6 +3,7 @@ import threading
 import time
 
 # Import team modules directly
+from . import handler
 from ..utils import multithreading
 # from ..protocol import udp_packet
 
@@ -59,7 +60,7 @@ class HybridFTPServerCLI:
                 multithreading.create_thread(
                     client_socket,
                     client_addr,
-                    multithreading.ftp_task_function
+                    handler.handle_client_session
                 )
             except socket.timeout:
                 continue
