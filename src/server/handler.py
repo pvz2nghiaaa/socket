@@ -18,7 +18,7 @@ class ClientSession:
             self.data_address = (ip,port)
             if self.data_socket:
                 self.data_socket.close()
-                sef.data_socket = None
+                self.data_socket = None
 
             return "200 PORT command successfully.\r\n"
         except Exception as e:
