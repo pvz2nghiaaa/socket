@@ -2,11 +2,22 @@ class ClientSession:
     """
     Quản lý trạng thái phiên kết nối của từng Client ở phía Server
     """
-    def __init__(self, control_socket):
-        self.control_socket = control_socket # Socket TCP điều khiển
+    def __init__(self, control_socket: socket.socket, root_dir: str = "./ftp_root"):
+        # Socket TCP điều khiển
+        self.control_socket = control_socket
+
+        # Data channel
         self.mode = None # ACTIVE hay PASSIVE
         self.data_address = None # (ip, port) của Client
         self.data_socket = None # Socket UDP của server (passive)
+        
+        # Authentication 
+        self.username = None
+        self.is_authenticated = False
+
+        # Thư mục hệ thống
+        self.root_directory = root_dir
+        self.current_directory = "/"
 
     def handle_port(self, arg: str) -> str:
         """
@@ -18,7 +29,7 @@ class ClientSession:
             self.data_address = (ip,port)
             if self.data_socket:
                 self.data_socket.close()
-                self.data_socket = None
+                sef.data_socket = None
 
             return "200 PORT command successfully.\r\n"
         except Exception as e:
