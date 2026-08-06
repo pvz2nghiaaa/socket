@@ -66,27 +66,49 @@ class ClientSession:
 
     def send_udp_data(self, data_str: str):
         """
-        Gửi dữ liệu chuỗi (ví dụ LIST, NLST) qua socket UDP dựa trên chế độ Active/Passive hiện hành.
+        Gửi dữ liệu chuỗi (ví dụ LIST, NLST) qua RDT over UDP.
         """
-        data_bytes = data_str.encode('utf-8')
-        
-        if self.mode == "PASSIVE":
-            if not self.data_socket:
-                raise ValueError("Passive data socket is not initialized.")
-            # Chờ nhận 1 gói tin bắt tay (handshake) rỗng nếu chưa có địa chỉ của Client
-            if not self.data_address:
-                _, client_udp_addr = self.data_socket.recvfrom(1024)
-                self.data_address = client_udp_addr
-                
-            self.data_socket.sendto(data_bytes, self.data_address)
+        # Ghi tạm ra file để RDTSender gửi đi
+        temp_filename = f"temp_list_{id(self)}.txt"
+        with open(temp_filename, "w", encoding="utf-8") as f:
+            f.write(data_str)
             
-        elif self.mode == "ACTIVE":
-            if not self.data_address:
-                raise ValueError("Active data address is not configured.")
-            # Trong Active Mode, Server tự tạo một socket UDP tạm để chủ động gửi dữ liệu sang Client
-            temp_udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            temp_udp_socket.sendto(data_bytes, self.data_address)
-            temp_udp_socket.close()
+        try:
+            if self.mode == "PASSIVE":
+                if not self.data_socket:
+                    raise ValueError("Passive data socket is not initialized.")
+                if not self.data_address:
+                    _, client_udp_addr = self.data_socket.recvfrom(1024)
+                    self.data_address = client_udp_addr
+                data_socket = self.data_socket
+                client_addr = self.data_address
+            else: # ACTIVE
+                if not self.data_address:
+                    raise ValueError("Active data address is not configured.")
+                data_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                server_ip, _ = self.control_socket.getsockname()
+                data_socket.bind((server_ip, 0))
+                client_addr = self.data_address
+                # Send Active handshake to client
+                try:
+                    data_socket.sendto(b"HANDSHAKE", client_addr)
+                except Exception as e:
+                    print(f"[Server Error] Active handshake failed: {e}")
+            
+            from src.protocol.rdt import RDTSender
+            sender = RDTSender(data_socket, client_addr)
+            sender.send_file(temp_filename, control_socket=self.control_socket, transfer_type='A')
+        finally:
+            if os.path.exists(temp_filename):
+                try:
+                    os.remove(temp_filename)
+                except Exception:
+                    pass
+            if self.mode == "ACTIVE":
+                try:
+                    data_socket.close()
+                except Exception:
+                    pass
 
 def parse_port_command(arg: str) -> tuple[str, int]:
     """

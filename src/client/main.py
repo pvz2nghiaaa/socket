@@ -163,6 +163,7 @@ class HybridFTPClientCLI:
         if not data_socket:
             return
 
+        resp1_received = False
         try:
             cmd = f"LIST {arg}".strip()
             self.control_socket.sendall((cmd + "\r\n").encode('utf-8'))
@@ -171,6 +172,7 @@ class HybridFTPClientCLI:
             if not resp1.startswith("150"):
                 data_socket.close()
                 return
+            resp1_received = True
 
             temp_path = "temp_list_output.txt"
             receiver = RDTReceiver(data_socket)
@@ -180,19 +182,23 @@ class HybridFTPClientCLI:
                 with open(temp_path, 'r', encoding='utf-8', errors='ignore') as f:
                     print(f.read().strip())
                 os.remove(temp_path)
-
-            resp2 = self.read_control_response()
-            print(resp2.strip())
         except Exception as e:
             print(f"[Client Error] LIST execution failed: {e}")
         finally:
             data_socket.close()
+            if resp1_received:
+                try:
+                    resp2 = self.read_control_response()
+                    print(resp2.strip())
+                except Exception:
+                    pass
 
     def execute_nlst(self, arg=""):
         data_socket, server_addr = self.setup_data_channel()
         if not data_socket:
             return
 
+        resp1_received = False
         try:
             cmd = f"NLST {arg}".strip()
             self.control_socket.sendall((cmd + "\r\n").encode('utf-8'))
@@ -201,6 +207,7 @@ class HybridFTPClientCLI:
             if not resp1.startswith("150"):
                 data_socket.close()
                 return
+            resp1_received = True
 
             temp_path = "temp_nlst_output.txt"
             receiver = RDTReceiver(data_socket)
@@ -210,13 +217,16 @@ class HybridFTPClientCLI:
                 with open(temp_path, 'r', encoding='utf-8', errors='ignore') as f:
                     print(f.read().strip())
                 os.remove(temp_path)
-
-            resp2 = self.read_control_response()
-            print(resp2.strip())
         except Exception as e:
             print(f"[Client Error] NLST execution failed: {e}")
         finally:
             data_socket.close()
+            if resp1_received:
+                try:
+                    resp2 = self.read_control_response()
+                    print(resp2.strip())
+                except Exception:
+                    pass
 
     def execute_get(self, remote_file, local_file=None):
         if not local_file:
@@ -226,6 +236,7 @@ class HybridFTPClientCLI:
         if not data_socket:
             return
 
+        resp1_received = False
         try:
             cmd = f"RETR {remote_file}"
             self.control_socket.sendall((cmd + "\r\n").encode('utf-8'))
@@ -234,6 +245,7 @@ class HybridFTPClientCLI:
             if not resp1.startswith("150"):
                 data_socket.close()
                 return
+            resp1_received = True
 
             print(f"[Client] Commencing RDT file download to '{local_file}'...")
             receiver = RDTReceiver(data_socket)
@@ -246,17 +258,22 @@ class HybridFTPClientCLI:
                 print(self.read_control_response().strip())
                 print(self.read_control_response().strip())
                 success = False
+                resp1_received = False
 
             if success:
                 print("[Client] Download completed successfully.")
-                resp2 = self.read_control_response()
-                print(resp2.strip())
             else:
                 print("[Client Error] Download aborted.")
         except Exception as e:
             print(f"[Client Error] RETR failed: {e}")
         finally:
             data_socket.close()
+            if resp1_received:
+                try:
+                    resp2 = self.read_control_response()
+                    print(resp2.strip())
+                except Exception:
+                    pass
 
     def execute_put(self, local_file, remote_file=None, append=False, unique=False):
         if not os.path.exists(local_file):
@@ -284,6 +301,7 @@ class HybridFTPClientCLI:
                 data_socket.close()
                 return
 
+        resp1_received = False
         try:
             if unique:
                 cmd = "STOU"
@@ -298,6 +316,7 @@ class HybridFTPClientCLI:
             if not resp1.startswith("150") and not resp1.startswith("250"):
                 data_socket.close()
                 return
+            resp1_received = True
 
             print(f"[Client] Commencing RDT file upload for '{local_file}'...")
             sender = RDTSender(data_socket, server_addr)
@@ -310,17 +329,22 @@ class HybridFTPClientCLI:
                 print(self.read_control_response().strip())
                 print(self.read_control_response().strip())
                 success = False
+                resp1_received = False
 
             if success:
                 print("[Client] Upload completed successfully.")
-                resp2 = self.read_control_response()
-                print(resp2.strip())
             else:
                 print("[Client Error] Upload aborted.")
         except Exception as e:
             print(f"[Client Error] Upload command execution failed: {e}")
         finally:
             data_socket.close()
+            if resp1_received:
+                try:
+                    resp2 = self.read_control_response()
+                    print(resp2.strip())
+                except Exception:
+                    pass
 
     def send_raw_command(self, cmd_line):
         if not self.is_connected:
