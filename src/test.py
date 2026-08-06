@@ -3,7 +3,7 @@ import time
 import socket
 import threading
 import hashlib
-from src.server.file_system import FileCommandHandler
+from src.server.file_system import stor_file, calculate_hash
 from src.protocol.rdt import RDTSender
 
 # Cấu hình mạng Test
@@ -30,19 +30,17 @@ def generate_test_file(filepath, size_mb):
 
 def mock_ftp_server():
     """Giả lập Data Plane của Server xử lý lệnh STOR"""
-    fs = FileCommandHandler(SERVER_DIR)
-    
     # Mở port nhận dữ liệu
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_socket.bind((SERVER_IP, DATA_PORT))
     
     print("[Server] Đang đợi nhận file qua Data Channel...")
     # Kích hoạt hàm STOR (Sẽ block ở đây cho đến khi nhận xong)
-    response = fs.handle_STOR("upload_test.bin", server_socket)
+    response = stor_file(SERVER_DIR, "upload_test.bin", server_socket)
     print(f"[Server] Kết quả STOR: {response}")
     
     # Kích hoạt hàm HASH để kiểm tra
-    hash_response = fs.handle_HASH("upload_test.bin", "MD5")
+    hash_response = calculate_hash(SERVER_DIR, "upload_test.bin", "MD5")
     print(f"[Server] Kết quả HASH: {hash_response}")
 
 def mock_ftp_client(client_filepath):

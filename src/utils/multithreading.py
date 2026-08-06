@@ -41,24 +41,3 @@ def shutdown_monitor(server_socket):
             
     print("[Server] All clients have disconnected.")
     server_socket.close()
-
-def ftp_task_function(client_socket, client_addr, shutdown_signal):
-    # thời gian chờ tối đa 300s
-    client_socket.settimeout(300.0)
-    
-    while not shutdown_signal.is_set():
-        try:
-            data = client_socket.recv(1024)
-            if not data:
-                break
-                
-        except socket.timeout:
-            # zombie detection
-            print(f"[!] Timeout: Client {client_addr} is hung. Close this thread!")
-            break
-            
-        except ConnectionResetError:
-            print(f"[!] Connection Reset: Suddenly lost connection from {client_addr}.")
-            break
-
-    client_socket.close()

@@ -2,7 +2,7 @@ import os
 import socket
 import time
 import select
-from protocol.udp_packet import create_packet, parse_packet, FLAG_DATA, FLAG_ACK, FLAG_FIN
+from .udp_packet import create_packet, parse_packet, FLAG_DATA, FLAG_ACK, FLAG_FIN
 
 WINDOW_SIZE = 4       
 TIMEOUT_SECONDS = 2.0 
