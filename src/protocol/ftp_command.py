@@ -42,6 +42,10 @@ def handle_pass(session, arg: str) -> str:
     if username in DEFAULT_USERS:
         if expected_pass == arg:
             session.is_authenticated = True
+            user_dir = os.path.abspath(os.path.join(session.base_root_directory, username))
+            os.makedirs(user_dir, exist_ok=True)
+            session.root_directory = user_dir
+            session.current_directory = "/"
             return "230 User logged in, proceed.\r\n"
         else:
             session.username = None

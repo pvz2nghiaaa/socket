@@ -20,7 +20,8 @@ class ClientSession:
         self.is_authenticated = False
 
         # Quản lý đường dẫn (File System directories)
-        self.root_directory = os.path.abspath(root_dir)
+        self.base_root_directory = os.path.abspath(root_dir)
+        self.root_directory = self.base_root_directory
         self.current_directory = "/"
         self.rename_from_path = None  # State lưu trữ path cũ khi RNFR chờ RNTO
 
