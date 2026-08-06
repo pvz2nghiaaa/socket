@@ -40,16 +40,15 @@ def handle_pass(session, arg: str) -> str:
     expected_pass = DEFAULT_USERS.get(username)
     
     if username in DEFAULT_USERS:
-        if expected_pass == "" or expected_pass == arg or username == "anonymous":
+        if expected_pass == arg:
             session.is_authenticated = True
             return "230 User logged in, proceed.\r\n"
         else:
             session.username = None
             return "530 Incorrect password.\r\n"
     else:
-        # Default fallback: allow login
-        session.is_authenticated = True
-        return "230 User logged in, proceed.\r\n"
+        session.username = None
+        return "530 User not found.\r\n"
 
 def handle_pwd(session) -> str:
     return f'257 "{session.current_directory}" is current directory.\r\n'
@@ -520,6 +519,11 @@ def process_ftp_command(session, raw_command: str) -> str:
     cmd, arg = parse_command(raw_command)
     if not cmd:
         return "500 Syntax error, command unrecognized.\r\n"
+
+    # Yêu cầu xác thực trước khi chạy các lệnh hệ thống
+    public_commands = ("USER", "PASS", "QUIT", "HELP")
+    if cmd not in public_commands and not session.is_authenticated:
+        return "530 Please login with USER and PASS first.\r\n"
 
     # Command Dispatcher
     if cmd == "USER":
