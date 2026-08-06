@@ -41,8 +41,8 @@ def mock_ftp_server():
     server_socket.close()
     
     # Kích hoạt hàm HASH để kiểm tra
-    hash_response = calculate_hash(SERVER_DIR, "upload_test.bin", "MD5")
-    print(f"[Server] Kết quả HASH: {hash_response}")
+    hash_val = calculate_hash(SERVER_DIR, "upload_test.bin", "MD5")
+    print(f"[Server] Kết quả HASH: 213 {hash_val}")
 
 def mock_ftp_client(client_filepath):
     """Giả lập Client đẩy file lên Server qua RDT"""

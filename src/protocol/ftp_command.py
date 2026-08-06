@@ -83,13 +83,26 @@ def handle_cwd(session, arg: str) -> str:
 def handle_mkd(session, arg: str) -> str:
     if not arg:
         return "501 Syntax error in parameters or arguments.\r\n"
-    res, _ = file_system.make_directory(session.root_directory, os.path.join(session.current_directory.lstrip("/"), arg))
-    return res + "\r\n"
+    try:
+        rel_path = file_system.make_directory(session.root_directory, os.path.join(session.current_directory.lstrip("/"), arg))
+        return f'257 "{rel_path}" directory created.\r\n'
+    except FileExistsError:
+        return "550 Directory already exists.\r\n"
+    except Exception as e:
+        return f"550 Create directory operation failed: {e}\r\n"
 
 def handle_rmd(session, arg: str) -> str:
     if not arg:
         return "501 Syntax error in parameters or arguments.\r\n"
-    return file_system.remove_directory(session.root_directory, os.path.join(session.current_directory.lstrip("/"), arg)) + "\r\n"
+    try:
+        file_system.remove_directory(session.root_directory, os.path.join(session.current_directory.lstrip("/"), arg))
+        return "250 Directory and its contents successfully removed.\r\n"
+    except FileNotFoundError:
+        return "550 Remove directory operation failed: Directory does not exist.\r\n"
+    except PermissionError as e:
+        return f"550 {e}\r\n"
+    except Exception as e:
+        return f"550 Remove directory operation failed: {e}\r\n"
 
 def handle_port(session, arg: str) -> str:
     return session.handle_port(arg)
@@ -176,7 +189,15 @@ def handle_stat(session, path: str = "") -> str:
 
 def handle_dele(session, filename: str) -> str:
     relative_path = os.path.join(session.current_directory.lstrip("/"), filename)
-    return file_system.delete_file(session.root_directory, relative_path) + "\r\n"
+    try:
+        file_system.delete_file(session.root_directory, relative_path)
+        return "250 Requested file action okay, completed.\r\n"
+    except FileNotFoundError:
+        return "550 File not found.\r\n"
+    except IsADirectoryError:
+        return "550 Cannot delete a directory.\r\n"
+    except Exception as e:
+        return f"450 Requested file action not taken. Error: {e}\r\n"
 
 def handle_rnfr(session, filename: str) -> str:
     try:
@@ -187,7 +208,7 @@ def handle_rnfr(session, filename: str) -> str:
             session.rename_from_path = relative_path
             print(f"[FileSystem] RNFR received: {filename}")
             return "350 Requested file action pending further information.\r\n"
-        return "550 File not found or is a directory.\r\n"
+        return "550 File not found.\r\n"
     except ValueError as e:
         return f"550 {e}\r\n"
 
@@ -198,10 +219,14 @@ def handle_rnto(session, new_filename: str) -> str:
         relative_new_path = os.path.join(session.current_directory.lstrip("/"), new_filename)
         # Check security on the target path
         _ = file_system.get_absolute_path(session.root_directory, relative_new_path)
-        res = file_system.rename_file(session.root_directory, session.rename_from_path, relative_new_path)
-        return res + "\r\n"
+        file_system.rename_file(session.root_directory, session.rename_from_path, relative_new_path)
+        return "250 Requested file action okay, completed.\r\n"
+    except FileNotFoundError:
+        return "550 Original file no longer exists.\r\n"
     except ValueError as e:
         return f"550 {e}\r\n"
+    except Exception as e:
+        return f"553 Requested action not taken. Error: {e}\r\n"
     finally:
         session.rename_from_path = None
 
@@ -212,7 +237,17 @@ def handle_hash(session, arg: str) -> str:
     filename = parts[0]
     algo = parts[1] if len(parts) > 1 else "MD5"
     relative_path = os.path.join(session.current_directory.lstrip("/"), filename)
-    return file_system.calculate_hash(session.root_directory, relative_path, algo) + "\r\n"
+    try:
+        hash_hex = file_system.calculate_hash(session.root_directory, relative_path, algo)
+        return f"213 {hash_hex}\r\n"
+    except FileNotFoundError:
+        return "550 File not found.\r\n"
+    except IsADirectoryError:
+        return "550 Cannot calculate hash of a directory.\r\n"
+    except ValueError as e:
+        return f"504 {e}\r\n"
+    except Exception as e:
+        return f"450 Requested file action not taken. Error: {e}\r\n"
 
 def handle_retr(session, filename: str) -> str:
     if not session.mode:

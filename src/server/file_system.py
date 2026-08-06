@@ -80,101 +80,76 @@ def generate_unique_filename(base_dir: str) -> str:
         if not os.path.exists(filepath):
             return unique_filename
 
-def delete_file(base_dir: str, filename: str) -> str:
+def delete_file(base_dir: str, filename: str) -> None:
     """Xóa file trên Server"""
-    try:
-        filepath = get_absolute_path(base_dir, filename)
-        if os.path.isfile(filepath):
-            os.remove(filepath)
-            print(f"[FileSystem] Deleted file: {filename}")
-            return "250 Requested file action okay, completed."
-        return "550 File not found or is a directory."
-    except ValueError as e:
-        return f"550 {e}"
-    except Exception as e:
-        print(f"[FileSystem] Delete error: {e}")
-        return "450 Requested file action not taken."
-
-def rename_file(base_dir: str, old_filename: str, new_filename: str) -> str:
-    """Đổi tên file/thư mục trên Server"""
-    try:
-        old_filepath = get_absolute_path(base_dir, old_filename)
-        new_filepath = get_absolute_path(base_dir, new_filename)
+    filepath = get_absolute_path(base_dir, filename)
+    if not os.path.exists(filepath):
+        raise FileNotFoundError("File not found.")
+    if os.path.isdir(filepath):
+        raise IsADirectoryError("Cannot delete a directory.")
         
-        if not os.path.exists(old_filepath):
-            return "550 Original file no longer exists."
-            
-        os.rename(old_filepath, new_filepath)
-        print(f"[FileSystem] Renamed file from {old_filename} to {new_filename}")
-        return "250 Requested file action okay, completed."
-    except ValueError as e:
-        return f"550 {e}"
-    except Exception as e:
-        print(f"[FileSystem] Rename error: {e}")
-        return "553 Requested action not taken."
+    os.remove(filepath)
+    print(f"[FileSystem] Deleted file: {filename}")
+
+def rename_file(base_dir: str, old_filename: str, new_filename: str) -> None:
+    """Đổi tên file/thư mục trên Server"""
+    old_filepath = get_absolute_path(base_dir, old_filename)
+    new_filepath = get_absolute_path(base_dir, new_filename)
+    
+    if not os.path.exists(old_filepath):
+        raise FileNotFoundError("Original file no longer exists.")
+        
+    os.rename(old_filepath, new_filepath)
+    print(f"[FileSystem] Renamed file from {old_filename} to {new_filename}")
 
 def calculate_hash(base_dir: str, filename: str, algorithm: str = 'MD5') -> str:
-    """Tính mã băm (MD5/SHA256) của file trên Server"""
-    try:
-        filepath = get_absolute_path(base_dir, filename)
+    """Tính mã băm (MD5/SHA256) của file trên Server và trả về chuỗi hash hex."""
+    filepath = get_absolute_path(base_dir, filename)
+    
+    if not os.path.exists(filepath):
+        raise FileNotFoundError("File not found.")
+    if os.path.isdir(filepath):
+        raise IsADirectoryError("Cannot calculate hash of a directory.")
         
-        if not os.path.isfile(filepath):
-            return "550 File not found or is a directory."
+    algo_upper = algorithm.upper().replace('-', '')
+    print(f"[FileSystem] Calculating {algo_upper} for {filename}...")
+    
+    if algo_upper == 'SHA256':
+        hasher = hashlib.sha256()
+    elif algo_upper == 'MD5':
+        hasher = hashlib.md5()
+    else:
+        print(f"[FileSystem] HASH Error: Unsupported algorithm '{algorithm}'")
+        raise ValueError(f"Unsupported hash algorithm '{algorithm}'.")
+        
+    with open(filepath, 'rb') as f:
+        while chunk := f.read(8192):
+            hasher.update(chunk)
             
-        algo_upper = algorithm.upper().replace('-', '')
-        print(f"[FileSystem] Calculating {algo_upper} for {filename}...")
-        
-        if algo_upper == 'SHA256':
-            hasher = hashlib.sha256()
-        elif algo_upper == 'MD5':
-            hasher = hashlib.md5()
-        else:
-            print(f"[FileSystem] HASH Error: Unsupported algorithm '{algorithm}'")
-            return f"504 Unsupported hash algorithm '{algorithm}'."
-            
-        with open(filepath, 'rb') as f:
-            while chunk := f.read(8192):
-                hasher.update(chunk)
-                
-        hash_hex = hasher.hexdigest()
-        print(f"[FileSystem] HASH Result ({algo_upper}): {hash_hex}")
-        return f"213 {hash_hex}"
-        
-    except ValueError as e:
-        return f"550 {e}"
-    except Exception as e:
-        print(f"[FileSystem] HASH Error: {e}")
-        return "450 Requested file action not taken."
+    hash_hex = hasher.hexdigest()
+    print(f"[FileSystem] HASH Result ({algo_upper}): {hash_hex}")
+    return hash_hex
 
-def make_directory(base_dir: str, path: str) -> tuple[str, str]:
-    """Tạo thư mục mới trên Server"""
-    try:
-        target_path = get_absolute_path(base_dir, path)
-        if os.path.exists(target_path):
-            return "550 Directory already exists.", ""
-            
-        os.makedirs(target_path, exist_ok=True)
-        rel_path = "/" + os.path.relpath(target_path, base_dir).replace("\\", "/").strip("/")
-        return f'257 "{rel_path}" directory created.', rel_path
-    except ValueError as e:
-        return f"550 {e}", ""
-    except Exception as e:
-        return f"550 Create directory operation failed: {e}", ""
+def make_directory(base_dir: str, path: str) -> str:
+    """Tạo thư mục mới trên Server và trả về đường dẫn tương đối."""
+    target_path = get_absolute_path(base_dir, path)
+    if os.path.exists(target_path):
+        raise FileExistsError("Directory already exists.")
+        
+    os.makedirs(target_path, exist_ok=True)
+    rel_path = "/" + os.path.relpath(target_path, base_dir).replace("\\", "/").strip("/")
+    return rel_path
 
-def remove_directory(base_dir: str, path: str) -> str:
+def remove_directory(base_dir: str, path: str) -> None:
     """Xóa thư mục trên Server"""
-    try:
-        target_path = get_absolute_path(base_dir, path)
-        if not os.path.exists(target_path) or not os.path.isdir(target_path):
-            return "550 Remove directory operation failed: Directory does not exist."
-            
-        if target_path == base_dir:
-            return "550 Cannot remove root directory."
-            
-        shutil.rmtree(target_path)
-        print(f"[FileSystem] Removed directory: {path}")
-        return "250 Directory and its contents successfully removed."
-    except ValueError as e:
-        return f"550 {e}"
-    except Exception as e:
-        return f"550 Remove directory operation failed: {e}"
+    target_path = get_absolute_path(base_dir, path)
+    abs_base = os.path.abspath(base_dir)
+    
+    if not os.path.exists(target_path) or not os.path.isdir(target_path):
+        raise FileNotFoundError("Directory does not exist.")
+        
+    if target_path == abs_base:
+        raise PermissionError("Cannot remove root directory.")
+        
+    shutil.rmtree(target_path)
+    print(f"[FileSystem] Removed directory: {path}")
