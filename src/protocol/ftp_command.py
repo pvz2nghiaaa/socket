@@ -317,8 +317,11 @@ def handle_retr(session, filename: str) -> str:
         
         # Start RDTSender to transmit file via UDP
         sender = RDTSender(data_socket, client_addr)
-        sender.send_file(filepath)
+        success = sender.send_file(filepath, control_socket=session.control_socket, transfer_type=session.transfer_type)
         
+        if not success:
+            return ""  # Response already sent by RDT loop (426 + 226)
+            
         return "226 Transfer complete.\r\n"
     except ValueError as e:
         return f"550 {e}\r\n"
@@ -362,8 +365,11 @@ def handle_stor(session, filename: str, append: bool = False) -> str:
         # Start RDTReceiver to write file from UDP stream
         receiver = RDTReceiver(data_socket)
         file_mode = 'ab' if append else 'wb'
-        receiver.receive_file(filepath, file_mode=file_mode)
+        success = receiver.receive_file(filepath, file_mode=file_mode, control_socket=session.control_socket, transfer_type=session.transfer_type)
         
+        if not success:
+            return ""  # Response already sent by RDT loop (426 + 226)
+            
         return "226 Transfer complete.\r\n"
     except ValueError as e:
         return f"550 {e}\r\n"
@@ -405,8 +411,11 @@ def handle_stou(session) -> str:
         
         # Start RDTReceiver to write unique file
         receiver = RDTReceiver(data_socket)
-        receiver.receive_file(filepath, file_mode='wb')
+        success = receiver.receive_file(filepath, file_mode='wb', control_socket=session.control_socket, transfer_type=session.transfer_type)
         
+        if not success:
+            return ""  # Response already sent by RDT loop (426 + 226)
+            
         return f"250 FILE: {unique_filename}\r\n"
     except Exception as e:
         print(f"[ftp_command] STOU Error: {e}")
