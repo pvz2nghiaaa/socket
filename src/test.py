@@ -3,8 +3,8 @@ import time
 import socket
 import threading
 import hashlib
-from src.server.file_system import stor_file, calculate_hash
-from src.protocol.rdt import RDTSender
+from src.server.file_system import calculate_hash
+from src.protocol.rdt import RDTSender, RDTReceiver
 
 # Cấu hình mạng Test
 SERVER_IP = "127.0.0.1"
@@ -35,9 +35,10 @@ def mock_ftp_server():
     server_socket.bind((SERVER_IP, DATA_PORT))
     
     print("[Server] Đang đợi nhận file qua Data Channel...")
-    # Kích hoạt hàm STOR (Sẽ block ở đây cho đến khi nhận xong)
-    response = stor_file(SERVER_DIR, "upload_test.bin", server_socket)
-    print(f"[Server] Kết quả STOR: {response}")
+    # Kích hoạt RDTReceiver trực tiếp
+    receiver = RDTReceiver(server_socket)
+    receiver.receive_file(os.path.join(SERVER_DIR, "upload_test.bin"), file_mode='wb')
+    server_socket.close()
     
     # Kích hoạt hàm HASH để kiểm tra
     hash_response = calculate_hash(SERVER_DIR, "upload_test.bin", "MD5")

@@ -1,13 +1,11 @@
 import os
 import uuid
-import socket
 import hashlib
 import time
 import stat
 import shutil
-from src.protocol.rdt import RDTSender, RDTReceiver
 
-def _get_absolute_path(base_dir: str, filename: str) -> str:
+def get_absolute_path(base_dir: str, filename: str) -> str:
     """
     Bảo mật: Ngăn chặn Directory Traversal Attack bằng os.path.commonpath
     """
@@ -73,73 +71,19 @@ def get_single_file_detail(path: str) -> str:
     
     return f"{mode_str}   1 owner    group    {size:10} {mtime} {name}\r\n"
 
-def retr_file(base_dir: str, filename: str, data_socket: socket.socket, client_addr: tuple) -> str:
-    """Tải file từ Server về Client (Download) qua RDT over UDP"""
-    try:
-        filepath = _get_absolute_path(base_dir, filename)
-        if not os.path.isfile(filepath):
-            return "550 File not found or is a directory."
-            
-        print(f"[FileSystem] Initiating RETR for {filename}")
-        
-        # Khởi tạo RDTSender để đẩy file qua UDP
-        sender = RDTSender(data_socket, client_addr)
-        sender.send_file(filepath)
-        
-        return "226 Transfer complete."
-    except ValueError as e:
-        return f"550 {e}"
-    except Exception as e:
-        print(f"[FileSystem] RETR Error: {e}")
-        return "451 Requested action aborted: local error in processing."
-    finally:
-        # Đảm bảo Data Channel được đóng sau khi truyền xong
-        data_socket.close()
-
-def stor_file(base_dir: str, filename: str, data_socket: socket.socket, append: bool = False) -> str:
-    """Tải file từ Client lên Server (Upload - Ghi đè/Nối tiếp) qua RDT over UDP"""
-    try:
-        filepath = _get_absolute_path(base_dir, filename)
-        print(f"[FileSystem] Initiating STOR/APPE for {filename} (Append: {append})")
-        
-        receiver = RDTReceiver(data_socket)
-        file_mode = 'ab' if append else 'wb'
-        receiver.receive_file(filepath, file_mode=file_mode)
-        
-        return "226 Transfer complete."
-    except ValueError as e:
-        return f"550 {e}"
-    except Exception as e:
-        print(f"[FileSystem] STOR/APPE Error: {e}")
-        return "451 Requested action aborted."
-    finally:
-        data_socket.close()
-
-def stou_file(base_dir: str, data_socket: socket.socket) -> tuple[str, str]:
-    """Tải file lên Server với tên ngẫu nhiên (Unique Upload) qua RDT over UDP"""
-    try:
-        while True:
-            unique_filename = f"file_{uuid.uuid4().hex[:8]}.bin"
-            filepath = os.path.join(base_dir, unique_filename)
-            if not os.path.exists(filepath):
-                break
-        
-        print(f"[FileSystem] Initiating STOU, generated name: {unique_filename}")
-        
-        receiver = RDTReceiver(data_socket)
-        receiver.receive_file(filepath, file_mode='wb')
-        
-        return f"250 FILE: {unique_filename}", unique_filename
-    except Exception as e:
-        print(f"[FileSystem] STOU Error: {e}")
-        return "451 Requested action aborted.", ""
-    finally:
-        data_socket.close()
+def generate_unique_filename(base_dir: str) -> str:
+    """Sinh tên file độc nhất trong base_dir, tránh đè file cũ."""
+    abs_base = os.path.abspath(base_dir)
+    while True:
+        unique_filename = f"file_{uuid.uuid4().hex[:8]}.bin"
+        filepath = os.path.join(abs_base, unique_filename)
+        if not os.path.exists(filepath):
+            return unique_filename
 
 def delete_file(base_dir: str, filename: str) -> str:
     """Xóa file trên Server"""
     try:
-        filepath = _get_absolute_path(base_dir, filename)
+        filepath = get_absolute_path(base_dir, filename)
         if os.path.isfile(filepath):
             os.remove(filepath)
             print(f"[FileSystem] Deleted file: {filename}")
@@ -154,8 +98,8 @@ def delete_file(base_dir: str, filename: str) -> str:
 def rename_file(base_dir: str, old_filename: str, new_filename: str) -> str:
     """Đổi tên file/thư mục trên Server"""
     try:
-        old_filepath = _get_absolute_path(base_dir, old_filename)
-        new_filepath = _get_absolute_path(base_dir, new_filename)
+        old_filepath = get_absolute_path(base_dir, old_filename)
+        new_filepath = get_absolute_path(base_dir, new_filename)
         
         if not os.path.exists(old_filepath):
             return "550 Original file no longer exists."
@@ -172,7 +116,7 @@ def rename_file(base_dir: str, old_filename: str, new_filename: str) -> str:
 def calculate_hash(base_dir: str, filename: str, algorithm: str = 'MD5') -> str:
     """Tính mã băm (MD5/SHA256) của file trên Server"""
     try:
-        filepath = _get_absolute_path(base_dir, filename)
+        filepath = get_absolute_path(base_dir, filename)
         
         if not os.path.isfile(filepath):
             return "550 File not found or is a directory."
@@ -205,7 +149,7 @@ def calculate_hash(base_dir: str, filename: str, algorithm: str = 'MD5') -> str:
 def make_directory(base_dir: str, path: str) -> tuple[str, str]:
     """Tạo thư mục mới trên Server"""
     try:
-        target_path = _get_absolute_path(base_dir, path)
+        target_path = get_absolute_path(base_dir, path)
         if os.path.exists(target_path):
             return "550 Directory already exists.", ""
             
@@ -220,7 +164,7 @@ def make_directory(base_dir: str, path: str) -> tuple[str, str]:
 def remove_directory(base_dir: str, path: str) -> str:
     """Xóa thư mục trên Server"""
     try:
-        target_path = _get_absolute_path(base_dir, path)
+        target_path = get_absolute_path(base_dir, path)
         if not os.path.exists(target_path) or not os.path.isdir(target_path):
             return "550 Remove directory operation failed: Directory does not exist."
             

@@ -1,6 +1,7 @@
 import os
 import socket
 from src.server import file_system
+from src.protocol.rdt import RDTSender, RDTReceiver
 
 # Default user dictionary: username -> password
 DEFAULT_USERS = {
@@ -181,7 +182,7 @@ def handle_rnfr(session, filename: str) -> str:
     try:
         relative_path = os.path.join(session.current_directory.lstrip("/"), filename)
         # Verify filepath is safe and exists
-        safe_path = file_system._get_absolute_path(session.root_directory, relative_path)
+        safe_path = file_system.get_absolute_path(session.root_directory, relative_path)
         if os.path.exists(safe_path):
             session.rename_from_path = relative_path
             print(f"[FileSystem] RNFR received: {filename}")
@@ -196,7 +197,7 @@ def handle_rnto(session, new_filename: str) -> str:
     try:
         relative_new_path = os.path.join(session.current_directory.lstrip("/"), new_filename)
         # Check security on the target path
-        _ = file_system._get_absolute_path(session.root_directory, relative_new_path)
+        _ = file_system.get_absolute_path(session.root_directory, relative_new_path)
         res = file_system.rename_file(session.root_directory, session.rename_from_path, relative_new_path)
         return res + "\r\n"
     except ValueError as e:
@@ -235,14 +236,28 @@ def handle_retr(session, filename: str) -> str:
         data_socket.bind((server_ip, 0))
         client_addr = session.data_address
 
-    session.control_socket.sendall(b"150 Opening UDP data connection for RETR.\r\n")
     try:
         relative_path = os.path.join(session.current_directory.lstrip("/"), filename)
-        response = file_system.retr_file(session.root_directory, relative_path, data_socket, client_addr)
-        return response + "\r\n"
+        filepath = file_system.get_absolute_path(session.root_directory, relative_path)
+        
+        if not os.path.isfile(filepath):
+            return "550 File not found or is a directory.\r\n"
+            
+        print(f"[FileSystem] Initiating RETR for {filename}")
+        session.control_socket.sendall(b"150 Opening UDP data connection for RETR.\r\n")
+        
+        # Start RDTSender to transmit file via UDP
+        sender = RDTSender(data_socket, client_addr)
+        sender.send_file(filepath)
+        
+        return "226 Transfer complete.\r\n"
+    except ValueError as e:
+        return f"550 {e}\r\n"
     except Exception as e:
-        return f"451 Requested action aborted: local error in processing. Error: {e}\r\n"
+        print(f"[ftp_command] RETR Error: {e}")
+        return "451 Requested action aborted: local error in processing.\r\n"
     finally:
+        data_socket.close()
         if session.mode == "PASSIVE":
             session.data_socket = None
         session.mode = None
@@ -268,14 +283,26 @@ def handle_stor(session, filename: str, append: bool = False) -> str:
         data_socket.bind((server_ip, 0))
 
     cmd_name = "APPE" if append else "STOR"
-    session.control_socket.sendall(f"150 Opening UDP data connection for {cmd_name}.\r\n".encode('utf-8'))
     try:
         relative_path = os.path.join(session.current_directory.lstrip("/"), filename)
-        response = file_system.stor_file(session.root_directory, relative_path, data_socket, append=append)
-        return response + "\r\n"
+        filepath = file_system.get_absolute_path(session.root_directory, relative_path)
+        
+        print(f"[FileSystem] Initiating {cmd_name} for {filename}")
+        session.control_socket.sendall(f"150 Opening UDP data connection for {cmd_name}.\r\n".encode('utf-8'))
+        
+        # Start RDTReceiver to write file from UDP stream
+        receiver = RDTReceiver(data_socket)
+        file_mode = 'ab' if append else 'wb'
+        receiver.receive_file(filepath, file_mode=file_mode)
+        
+        return "226 Transfer complete.\r\n"
+    except ValueError as e:
+        return f"550 {e}\r\n"
     except Exception as e:
-        return f"451 Requested action aborted. Error: {e}\r\n"
+        print(f"[ftp_command] {cmd_name} Error: {e}")
+        return "451 Requested action aborted.\r\n"
     finally:
+        data_socket.close()
         if session.mode == "PASSIVE":
             session.data_socket = None
         session.mode = None
@@ -300,13 +327,23 @@ def handle_stou(session) -> str:
         server_ip, _ = session.control_socket.getsockname()
         data_socket.bind((server_ip, 0))
 
-    session.control_socket.sendall(b"150 Opening UDP data connection for STOU.\r\n")
     try:
-        response, _ = file_system.stou_file(session.root_directory, data_socket)
-        return response + "\r\n"
+        unique_filename = file_system.generate_unique_filename(session.root_directory)
+        filepath = file_system.get_absolute_path(session.root_directory, unique_filename)
+        
+        print(f"[FileSystem] Initiating STOU, generated name: {unique_filename}")
+        session.control_socket.sendall(b"150 Opening UDP data connection for STOU.\r\n")
+        
+        # Start RDTReceiver to write unique file
+        receiver = RDTReceiver(data_socket)
+        receiver.receive_file(filepath, file_mode='wb')
+        
+        return f"250 FILE: {unique_filename}\r\n"
     except Exception as e:
-        return f"451 Requested action aborted. Error: {e}\r\n"
+        print(f"[ftp_command] STOU Error: {e}")
+        return "451 Requested action aborted.\r\n"
     finally:
+        data_socket.close()
         if session.mode == "PASSIVE":
             session.data_socket = None
         session.mode = None
