@@ -110,12 +110,29 @@ def handle_port(session, arg: str) -> str:
 def handle_pasv(session) -> str:
     return session.handle_pasv()
 
-def handle_list(session) -> str:
+def handle_list(session, arg: str = "") -> str:
     if not session.mode:
         return "425 Can't open data connection. No mode selected.\r\n"
     try:
-        actual_path = os.path.join(session.root_directory, session.current_directory.lstrip("/"))
-        directory_data = file_system.get_detailed_list(actual_path)
+        if arg:
+            if arg.startswith("/") or arg.startswith("\\"):
+                target_path = os.path.abspath(os.path.join(session.root_directory, arg.lstrip("/\\")))
+            else:
+                current_abs = os.path.abspath(os.path.join(session.root_directory, session.current_directory.lstrip("/\\")))
+                target_path = os.path.abspath(os.path.join(current_abs, arg))
+        else:
+            target_path = os.path.abspath(os.path.join(session.root_directory, session.current_directory.lstrip("/\\")))
+            
+        if os.path.commonpath([session.root_directory, target_path]) != session.root_directory:
+            return "550 Permission denied.\r\n"
+            
+        if not os.path.exists(target_path):
+            return "550 Path does not exist.\r\n"
+            
+        if os.path.isdir(target_path):
+            directory_data = file_system.get_detailed_list(target_path)
+        else:
+            directory_data = file_system.get_single_file_detail(target_path)
     except Exception as e:
         return f"450 Requested file action not taken. Error: {e}\r\n"
         
@@ -126,12 +143,29 @@ def handle_list(session) -> str:
     except Exception as e:
         return f"426 Connection closed; transfer aborted. Error: {e}\r\n"
 
-def handle_nlst(session) -> str:
+def handle_nlst(session, arg: str = "") -> str:
     if not session.mode:
         return "425 Can't open data connection. No mode selected.\r\n"
     try:
-        actual_path = os.path.join(session.root_directory, session.current_directory.lstrip("/"))
-        directory_data = file_system.get_list(actual_path)
+        if arg:
+            if arg.startswith("/") or arg.startswith("\\"):
+                target_path = os.path.abspath(os.path.join(session.root_directory, arg.lstrip("/\\")))
+            else:
+                current_abs = os.path.abspath(os.path.join(session.root_directory, session.current_directory.lstrip("/\\")))
+                target_path = os.path.abspath(os.path.join(current_abs, arg))
+        else:
+            target_path = os.path.abspath(os.path.join(session.root_directory, session.current_directory.lstrip("/\\")))
+            
+        if os.path.commonpath([session.root_directory, target_path]) != session.root_directory:
+            return "550 Permission denied.\r\n"
+            
+        if not os.path.exists(target_path):
+            return "550 Path does not exist.\r\n"
+            
+        if os.path.isdir(target_path):
+            directory_data = file_system.get_list(target_path)
+        else:
+            directory_data = os.path.basename(target_path) + "\r\n"
     except Exception as e:
         return f"450 Requested file action not taken. Error: {e}\r\n"
         
@@ -384,6 +418,33 @@ def handle_stou(session) -> str:
         session.mode = None
         session.data_address = None
 
+def handle_cdup(session) -> str:
+    return handle_cwd(session, "..")
+
+def handle_noop(session) -> str:
+    return "200 Command OK.\r\n"
+
+def handle_type(session, arg: str) -> str:
+    if not arg:
+        return "501 Syntax error in parameters or arguments.\r\n"
+    t = arg.upper()
+    if t in ("A", "I"):
+        session.transfer_type = t
+        return f"200 Type set to {t}.\r\n"
+    return f"504 Command not implemented for that parameter '{arg}'.\r\n"
+
+def handle_mode(session, arg: str) -> str:
+    if not arg:
+        return "501 Syntax error in parameters or arguments.\r\n"
+    m = arg.upper()
+    if m in ("S", "B", "C"):
+        session.transfer_mode = m
+        return f"200 Mode set to {m}.\r\n"
+    return f"504 Command not implemented for that parameter '{arg}'.\r\n"
+
+def handle_abor(session) -> str:
+    return "225 No transfer in progress.\r\n"
+
 def handle_quit(session) -> str:
     session.is_authenticated = False
     session.username = None
@@ -401,8 +462,8 @@ def handle_help(session, arg: str = "") -> str:
             "RMD":  "RMD <dir>      : Remove directory",
             "PORT": "PORT <ip,p1,p2> : Setup active data channel connection",
             "PASV": "PASV           : Setup passive data channel connection",
-            "LIST": "LIST           : List files details",
-            "NLST": "NLST           : List file names",
+            "LIST": "LIST [path]    : List files details",
+            "NLST": "NLST [path]    : List file names",
             "QUIT": "QUIT           : Terminate connection",
             "HELP": "HELP [command] : Display help info",
             "SIZE": "SIZE <file>    : Get file size",
@@ -415,7 +476,12 @@ def handle_help(session, arg: str = "") -> str:
             "DELE": "DELE <file>    : Delete file",
             "RNFR": "RNFR <file>    : Rename from",
             "RNTO": "RNTO <file>    : Rename to",
-            "HASH": "HASH <file>    : Get file checksum"
+            "HASH": "HASH <file>    : Get file checksum",
+            "CDUP": "CDUP           : Change working directory to parent directory",
+            "NOOP": "NOOP           : No-operation keep-alive ping",
+            "TYPE": "TYPE <A|I>     : Set transfer type (ASCII or Binary)",
+            "MODE": "MODE <S|B|C>   : Set transfer mode (Stream, Block, Compressed)",
+            "ABOR": "ABOR           : Abort the current data transfer"
         }
         if cmd in help_docs:
             return f"214 {help_docs[cmd]}\r\n"
@@ -424,7 +490,7 @@ def handle_help(session, arg: str = "") -> str:
 
     msg = (
         "214-The following commands are recognized:\r\n"
-        " USER PASS CWD PWD MKD RMD QUIT HELP PORT PASV LIST NLST SIZE MDTM STAT RETR STOR APPE STOU DELE RNFR RNTO HASH\r\n"
+        " USER PASS CWD PWD MKD RMD QUIT HELP PORT PASV LIST NLST SIZE MDTM STAT RETR STOR APPE STOU DELE RNFR RNTO HASH CDUP NOOP TYPE MODE ABOR\r\n"
         "214 Help OK.\r\n"
     )
     return msg
@@ -456,9 +522,9 @@ def process_ftp_command(session, raw_command: str) -> str:
     elif cmd == "PASV":
         return handle_pasv(session)
     elif cmd == "LIST":
-        return handle_list(session)
+        return handle_list(session, arg)
     elif cmd == "NLST":
-        return handle_nlst(session)
+        return handle_nlst(session, arg)
     elif cmd == "SIZE":
         return handle_size(session, arg)
     elif cmd == "MDTM":
@@ -485,5 +551,15 @@ def process_ftp_command(session, raw_command: str) -> str:
         return handle_quit(session)
     elif cmd == "HELP":
         return handle_help(session, arg)
+    elif cmd == "CDUP":
+        return handle_cdup(session)
+    elif cmd == "NOOP":
+        return handle_noop(session)
+    elif cmd == "TYPE":
+        return handle_type(session, arg)
+    elif cmd == "MODE":
+        return handle_mode(session, arg)
+    elif cmd == "ABOR":
+        return handle_abor(session)
     else:
         return f"502 Command '{cmd}' not implemented.\r\n"

@@ -24,6 +24,10 @@ class ClientSession:
         self.current_directory = "/"
         self.rename_from_path = None  # State lưu trữ path cũ khi RNFR chờ RNTO
 
+        # Thiết lập kiểu và chế độ truyền mặc định
+        self.transfer_type = "I"  # default is Image/Binary
+        self.transfer_mode = "S"  # default is Stream
+
         os.makedirs(self.root_directory, exist_ok=True)
 
     def handle_port(self, arg: str) -> str:
