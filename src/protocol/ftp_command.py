@@ -353,6 +353,10 @@ def handle_stor(session, filename: str, append: bool = False) -> str:
         data_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         server_ip, _ = session.control_socket.getsockname()
         data_socket.bind((server_ip, 0))
+        try:
+            data_socket.sendto(b"HANDSHAKE", session.data_address)
+        except Exception as e:
+            print(f"[Server Error] Failed to send Active handshake: {e}")
 
     cmd_name = "APPE" if append else "STOR"
     try:
@@ -401,6 +405,10 @@ def handle_stou(session) -> str:
         data_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         server_ip, _ = session.control_socket.getsockname()
         data_socket.bind((server_ip, 0))
+        try:
+            data_socket.sendto(b"HANDSHAKE", session.data_address)
+        except Exception as e:
+            print(f"[Server Error] Failed to send Active handshake: {e}")
 
     try:
         unique_filename = file_system.generate_unique_filename(session.root_directory)
