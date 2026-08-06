@@ -524,6 +524,11 @@ def process_ftp_command(session, raw_command: str) -> str:
     if not cmd:
         return "500 Syntax error, command unrecognized.\r\n"
 
+    # Yêu cầu xác thực trước khi chạy các lệnh hệ thống
+    public_commands = ("USER", "PASS", "QUIT", "HELP")
+    if cmd not in public_commands and not session.is_authenticated:
+        return "530 Please login with USER and PASS first.\r\n"
+
     # Command Dispatcher
     if cmd == "USER":
         return handle_user(session, arg)
