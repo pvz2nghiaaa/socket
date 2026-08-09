@@ -9,7 +9,7 @@ from ..utils import multithreading
 
 
 class HybridFTPServerCLI:
-    def __init__(self, host='127.0.0.1', port=2121):
+    def __init__(self, host='0.0.0.0', port=2121):
         self.host = host
         self.port = port
         self.server_socket = None
