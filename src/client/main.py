@@ -525,7 +525,8 @@ class HybridFTPClientCLI:
                     if len(parts) < 2:
                         print("Usage: hash <filename> [MD5|SHA-256]")
                     else:
-                        self.send_raw_command(f"HASH {parts[1]}")
+                        algo = parts[2] if len(parts) > 2 else "MD5"
+                        self.send_raw_command(f"HASH {parts[1]} {algo}")
 
                 elif cmd in ('state', 'status'):
                     self.display_state()
