@@ -446,18 +446,18 @@ class HybridFTPClientCLI:
                     arg = parts[1] if len(parts) > 1 else ""
                     self.execute_nlst(arg)
 
-                elif cmd == 'get':
+                elif cmd in ('get', 'retr'):
                     if len(parts) < 2:
-                        print("Usage: get <remote_file> [local_file]")
+                        print("Usage: get/retr <remote_file> [local_file]")
                     else:
                         tokens = parts[1].split()
                         remote = tokens[0]
                         local = tokens[1] if len(tokens) > 1 else None
                         self.execute_get(remote, local)
 
-                elif cmd == 'put':
+                elif cmd in ('put', 'stor'):
                     if len(parts) < 2:
-                        print("Usage: put <local_file> [remote_file]")
+                        print("Usage: put/stor <local_file> [remote_file]")
                     else:
                         tokens = parts[1].split()
                         local = tokens[0]
@@ -504,7 +504,7 @@ class HybridFTPClientCLI:
                     else:
                         self.send_raw_command(f"RMD {parts[1]}")
 
-                elif cmd == 'delete':
+                elif cmd in ('delete', 'dele'):
                     if len(parts) < 2:
                         print("Usage: delete <file>")
                     else:

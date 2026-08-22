@@ -295,7 +295,8 @@ def handle_retr(session, filename: str) -> str:
             return "425 Can't open data connection. No passive socket.\r\n"
         if not session.data_address:
             try:
-                # Wait for passive handshake from client
+                # Wait for passive handshake from client (with a 10s timeout to prevent deadlocks)
+                session.data_socket.settimeout(10.0)
                 _, client_udp_addr = session.data_socket.recvfrom(1024)
                 session.data_address = client_udp_addr
             except Exception as e:
@@ -347,6 +348,8 @@ def handle_stor(session, filename: str, append: bool = False) -> str:
             return "425 Can't open data connection. No passive socket.\r\n"
         if not session.data_address:
             try:
+                # Wait for passive handshake from client (with a 10s timeout to prevent deadlocks)
+                session.data_socket.settimeout(10.0)
                 _, client_udp_addr = session.data_socket.recvfrom(1024)
                 session.data_address = client_udp_addr
             except Exception as e:
@@ -399,6 +402,8 @@ def handle_stou(session) -> str:
             return "425 Can't open data connection. No passive socket.\r\n"
         if not session.data_address:
             try:
+                # Wait for passive handshake from client (with a 10s timeout to prevent deadlocks)
+                session.data_socket.settimeout(10.0)
                 _, client_udp_addr = session.data_socket.recvfrom(1024)
                 session.data_address = client_udp_addr
             except Exception as e:
